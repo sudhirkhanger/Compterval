@@ -1,26 +1,57 @@
+/*
+ * Copyright 2021 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.example.androiddevchallenge
 
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.*
-import androidx.compose.material.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.Button
+import androidx.compose.material.ButtonDefaults
+import androidx.compose.material.MaterialTheme
+import androidx.compose.material.Surface
+import androidx.compose.material.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.painter.Painter
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.androiddevchallenge.ui.theme.MyTheme
 import kotlinx.coroutines.delay
 
 val waterColor = Color(red = 125, green = 207, blue = 241)
+const val TIMEOUT = 10
 
 @ExperimentalAnimationApi
 @Composable
@@ -52,11 +83,27 @@ fun TimerDarkPreview() {
 @Composable
 fun HourGlass() {
     val animationState = remember { mutableStateOf(false) }
+    var timer by remember { mutableStateOf(TIMEOUT) }
     Column {
-        StartButton(
-            animationState = animationState.value,
-            onToggleAnimationState = { animationState.value = animationState.value.not() }
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            StartButton(
+                animationState = animationState.value,
+                onToggleAnimationState = { animationState.value = animationState.value.not() }
+            )
+            Text(
+                text = "$timer Seconds",
+                fontWeight = FontWeight.Bold,
+                fontSize = 24.sp,
+                color = MaterialTheme.colors.onSurface
+            )
+        }
+
         BoxWithConstraints(
             modifier = Modifier.padding(8.dp)
         ) {
@@ -65,10 +112,11 @@ fun HourGlass() {
             TopTriangleStroke(height = height, width = width)
             BottomTriangleStroke(height = height, width = width)
             ClockScreen(
-                countdownSpan = 60,
+                countdownSpan = TIMEOUT,
                 height = height,
                 width = width,
-                isClockRunning = animationState.value
+                isClockRunning = animationState.value,
+                onTimeUpdate = { timer = it }
             )
         }
     }
@@ -126,58 +174,6 @@ fun BottomTriangleStroke(height: Dp, width: Dp) {
             path = path,
             color = color,
             style = Stroke(width = 8f)
-        )
-    }
-}
-
-@ExperimentalAnimationApi
-@Composable
-fun FallingDroplet(
-    isDropletFalling: Boolean,
-    maxWidth: Dp,
-    maxHeight: Dp
-) {
-    if (isDropletFalling) {
-        val resource: Painter
-        val modifier: Modifier
-        val dropletSize = 25.dp
-        val infiniteTransition = rememberInfiniteTransition()
-        val bubbleDirectionState = infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(
-                    durationMillis = 500,
-                    easing = LinearEasing
-                )
-            )
-        )
-        val yPositionState = infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(
-                    durationMillis = 2000,
-                    easing = LinearEasing
-                )
-            )
-        )
-        resource = if (bubbleDirectionState.value <= .5f) {
-            painterResource(id = R.drawable.drop_l)
-        } else {
-            painterResource(id = R.drawable.drop_r)
-        }
-        modifier =
-            Modifier.offset(
-                x = (maxWidth - dropletSize) / 2,
-                y = (maxHeight / 2) + (((maxHeight / 2) - dropletSize) * yPositionState.value)
-            )
-        Image(
-            modifier = modifier
-                .width(dropletSize)
-                .height(dropletSize),
-            painter = resource,
-            contentDescription = "Falling droplet"
         )
     }
 }
@@ -265,33 +261,28 @@ fun ClockScreen(
     isClockRunning: Boolean,
     countdownSpan: Int,
     height: Dp,
-    width: Dp
+    width: Dp,
+    onTimeUpdate: (Int) -> Unit
 ) {
     var timer by remember { mutableStateOf(countdownSpan) }
-    var dropletFallingState by remember { mutableStateOf(true) }
     var percent by remember { mutableStateOf(100) }
     if (!isClockRunning) {
         timer = countdownSpan
-        dropletFallingState = false
         percent = 100
     } else {
-        dropletFallingState = true
-
-        LaunchedEffect(dropletFallingState) {
+        LaunchedEffect(0) {
             while (true) {
                 delay(1000)
                 timer -= 1
                 percent = (timer * 100) / countdownSpan
-                if (timer <= 0) {
-                    dropletFallingState = false
-                    break
-                }
+                if (timer <= 0) break
             }
         }
     }
+
+    onTimeUpdate(timer)
     TopTriangleFill(height = height, width = width, percent = percent)
     BottomTriangleFill(height = height, width = width, percent = percent)
-    FallingDroplet(isDropletFalling = dropletFallingState, maxWidth = width, maxHeight = height)
 }
 
 @Composable
@@ -299,28 +290,21 @@ fun StartButton(
     animationState: Boolean,
     onToggleAnimationState: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        horizontalArrangement = Arrangement.Center
-    ) {
-        if (animationState) {
-            Button(
-                onClick = onToggleAnimationState,
-                colors = ButtonDefaults.buttonColors(
-                    backgroundColor = Color.Red,
-                    contentColor = Color.White
-                )
-            ) {
-                Text("Stop")
-            }
-        } else {
-            Button(
-                onClick = onToggleAnimationState,
-            ) {
-                Text("Start")
-            }
+    if (animationState) {
+        Button(
+            onClick = onToggleAnimationState,
+            colors = ButtonDefaults.buttonColors(
+                backgroundColor = Color.Red,
+                contentColor = Color.White
+            )
+        ) {
+            Text("Stop")
+        }
+    } else {
+        Button(
+            onClick = onToggleAnimationState,
+        ) {
+            Text("Start")
         }
     }
 }
